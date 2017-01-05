@@ -1,0 +1,94 @@
+OPERATING SYSTEM CSE506 HOMEWORK 1
+Student Name: Prachi Poddar
+SBU ID: 110815897
+
+
+Aim: 
+ This project creates a new kernal method which merges the data from two input files into an output file.
+ This system function is then called from the user function and the arguments/inputs are given through command line. 
+
+	 
+Implementation Overview: 
+ The project implementation involves the following files:
+ - sys_xmergesort.c 
+ - sys_xmergesort.h 
+ - xmergesort.c 
+ - kernel.config 
+ - Makefile
+
+						 
+Implementation Description:
+ - sys_xmergesort.c
+  This file contains the kernel space implementation of the system call with the following features:
+  * Unwraps the arguments comming from the user side and performs necessary checks to ensure that all of them are valid.
+  * The input and output files are opened and error handling is done in case of failure to do the same. If output file does not exist, a new file is created in the ownership of the user calling the function. The permissions assigned to this file is in accordance with the permissions of both the input files. This means the permissions assigned to the new output file cannot be higher than what the input files already have. The files are closed before the termination(in both success and failure) of the program.
+  * All the flags are implemented.The flag checking is done to ensure that user has provided valid combination of flags. If not, error handling is done accordingly.
+  * Six temporary buffers are created dynamically, each with the size of the PAGE_SIZE i.e. 4KB. In case enough space is not there in the memory, error handling is done accordingly. It has been ensured to free all the dynamically allocated memory before the program termination(in both success and failure).
+  * There are three buffers (2 input buffer and one output buffer), each corresponding to the 2 input and 1 output file. These buffers store 4KB data of their corresponding files from the start.
+  * There are two buffers (let's call it the sentence buffers here), each of which stores one sentence from the two input buffers.
+  * The data in these two sentence buffers are compared and the smallest one is stored into the output buffer. After storing the data in output buffer, that buffer fetches the next sentence from it's corresponding input buffer. This process is repeated till all the data from both the input files have been read completely. Anytime when the input or output buffers get filled, it is overwritten by the next chunk of 4KB data from it's corresponding input file. The logic handles the cases when the input/output/sentence buffers are partially filled by maintaining size buffer for each variable. Also, to know from where the next read and next write happens in the input and output files respectively, offset variables are maintained for each buffer.  
+  * The comparision between the sentence buffer is achieved using two compare functions, one of which performs case-sensitive compare and the other one performs case-insensitive compare. The function which is called depends on the flag passed to the sys_call at run-time. By default, it is case sensitive.
+  * The program also handles the scenario where the input buffer contains only partial sentence whose other part is still in it's corresponding input file. In this case, the input buffer is overwritten with a new read from the input file. The offset (starting) of this read is the start of that partial sentence, thus ensuring that the entire sentence is accommodated in the input buffer (as the max size a buffer could have is the page size i.e. 4KB).
+  * One more buffer is used to store the last written sentence into the output buffer to find that the input files are in sorted order or not. Each time the comparisoin is done, this buffer is compared with both the sentence buffers. If any of these sentence buffers are smaller than this buffer, it will indicate that the input files does not contain data in sorted order. If flag "t" is ON, the mergering is stopped, output file is deleted and error handling is not accordingly. If flag "t" is OFF, the program continues to merge.
+  * The program also handles whether the duplicate entries should to allowed or not. It depends on the value of the flags send as arguments.
+  * 5 functions have been created namely file_open, file_close, file_read, file_write, file_remove to perform necessary file operations.
+  * 2 additional functions namely embed and extract are defined. They are used for reading/writing sentences to/fro the sentence buffers and the input/output buffers.
+  * If the "d" flag exists, while merging the program also maintains a count of the number of sentences inserted into the output file.
+  
+ - sys_xmergesort.h
+  This header file contains the struct required for defining the structure of arguments which are to be passed in the system call. It is passed between the kernel and the userspace.
+
+ - xmergesort.c
+  This file contains the userspace code for executing the system call. This program is responsible for properly evaluating the command line invocation of the program and calling the kernel method or throwing error accordingly. It evaluates the relevant option flags and describes to the system call which files are to be processed and in what manner.
+  It expects the following input from the command line in the same order given below:
+  * input file1 (mandatory)
+  * input file2 (mandatory)
+  * output file (mandatory)
+  * flags (mandatory)
+  * data (optional)
+  Argument validation is done both at the user and kernel side. 
+  Also, both reletive and absolute file paths are considered. 
+  
+ - kernel.config
+   It contains a minimal linux kernel configuration. I tried to reduce it to 990 lines.
+  
+  
+How to build:
+ 1. make
+ 2. sh install_module.sh 
+ 
+ 
+How to use:
+ ./xmergesort [-uaitd] outputFile inputFile1 inputFile2
+ where:
+ -u 0x01: output sorted records; if duplicates found, output only one copy
+ -a 0x02: output all records, even if there are duplicates
+ -i 0x04: compare records case-insensitive (case sensitive by default)
+ -t 0x10: if any input file is found NOT to be sorted, stop and return an error (EINVAL); otherwise continue to output records ONLY if any are found that are in ascending order to what you've found so far.
+ -d 0x20: return the number of sorted records written out in "data"
+ NOTE: At least one option needs to be present and -u and -a are mutually exclusive and exactly one out of the two has to be present depending on your choice of mergesorting alongside other options, if any.
+
+
+Error Handling
+ Some of the errors/conditions which I have attempted to handle and resolve:
+ - missing arguments passed
+ - null arguments
+ - pointers to bad addresses
+ - invalid flags or combination of flags
+ - input files cannot be opened or read
+ - output file cannot be opened or written
+ - input or output files are not regular, or they point to the same file
+ - input files are the same
+ - dynamic options placement in the cmd invocation of xmergesort userspace program
+ - write primarily in a temporary file in order to prevent partial writing of data due to crashes
+ - proper rename as well as unlink helper functions to handle output file finalisation based on success or failure
+ - and few more such handlings which can be seen in the code ...
+ Note - The code has been written to agree completely with the guidelines stated in the file "CodingStyle" in "Documentation" directory.
+
+ 
+REFERENCES -
+ - http://lxr.free-electrons.com/ - for code reference and navigation online
+ - http://www-numi.fnal.gov/offline_software/srt_public_context/WebDocs/Errors/unix_system_errors.html - for error code reference
+ - http://man7.org/linux/man-pages/man3/opterr.3.html - understanding getopt
+ - http://man7.org/linux/man-pages/ - for overview to various flags and existing calls
+
